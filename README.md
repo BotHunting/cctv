@@ -43,4 +43,4 @@ Website CCTV Live Streaming adalah aplikasi berbasis web yang dirancang untuk me
 1. **Clone Repository:**
 
    ```bash
-   git clone https://github.com/Username/website-cctv.git
+   git clone https://github.com/BotHunting/cctv.git
