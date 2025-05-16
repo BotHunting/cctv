@@ -1,5 +1,4 @@
 <?php
-
 include "header.php";
 require 'koneksi.php';
 
@@ -30,7 +29,6 @@ $videos = $stmt->get_result();
     <div class="container mt-5">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2>Live CCTV ATCS</h2>
-            <!-- Tombol Tambah Video hanya muncul jika pengguna login -->
             <?php if ($logged_in): ?>
                 <a href="tambah_video.php" class="btn btn-success">+ Tambah Video</a>
             <?php endif; ?>
@@ -42,16 +40,17 @@ $videos = $stmt->get_result();
                     <div class="card shadow-sm">
                         <div class="card-body">
                             <h5 class="card-title"><?= htmlspecialchars($video['lokasi']) ?></h5>
-                            <div class="d-grid gap-2">
-                                <button type="button" class="btn btn-primary open-video"
-                                    data-src="<?= htmlspecialchars($video['link_embed']) ?>">Tampilkan Video</button>
 
-                                <!-- Tombol Edit dan Hapus hanya muncul jika pengguna login -->
-                                <?php if ($logged_in): ?>
+                            <div class="mb-3">
+                                <?= getVideoPreview($video['link_embed']) ?>
+                            </div>
+
+                            <?php if ($logged_in): ?>
+                                <div class="d-grid gap-2">
                                     <a href="edit_video.php?id=<?= $video['id'] ?>" class="btn btn-warning">Edit Link</a>
                                     <a href="live.php?hapus=<?= $video['id'] ?>" class="btn btn-danger" onclick="return confirm('Yakin ingin menghapus video ini?')">Hapus</a>
-                                <?php endif; ?>
-                            </div>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -60,71 +59,62 @@ $videos = $stmt->get_result();
     </div>
 </div>
 
-<!-- Modal untuk video overlay -->
-<div class="modal fade" id="videoModal" tabindex="-1" aria-labelledby="videoModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="videoModalLabel">Video Daerah</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="embed-responsive embed-responsive-16by9">
-                    <iframe class="embed-responsive-item" src="" allowfullscreen></iframe>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+<?php
+function getVideoPreview($src) {
+    if (!$src) return '<div class="text-danger">Link tidak tersedia</div>';
 
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const openButtons = document.querySelectorAll('.open-video');
-        const videoModal = document.getElementById('videoModal');
+    $safeSrc = htmlspecialchars($src);
 
-        openButtons.forEach(button => {
-            button.addEventListener('click', function () {
-                const videoSrc = this.getAttribute('data-src');
-                const videoIframe = videoModal.querySelector('iframe');
+    // YouTube
+    if (preg_match('/(youtube\.com|youtu\.be)/', $src)) {
+        $embedLink = preg_replace('/watch\?v=/', 'embed/', $src);
+        return "<iframe class='w-100' height='200' src='{$embedLink}' allowfullscreen allow='autoplay'></iframe>";
+    }
 
-                if (videoSrc.includes('youtube.com') || videoSrc.includes('youtu.be')) {
-                    videoIframe.src = videoSrc.replace('watch?v=', 'embed/') + '?autoplay=1';
-                } else if (videoSrc.includes('.m3u8')) {
-                    videoIframe.src = `https://www.jwplayer.com/players/8gfMlN9s-8GFjZ8kj.html?file=${videoSrc}`;
-                } else {
-                    videoIframe.src = videoSrc;
-                }
-
-                videoModal.classList.add('show');
-                videoModal.style.display = 'block';
-                document.body.classList.add('modal-open');
-                const backdrop = document.createElement('div');
-                backdrop.classList.add('modal-backdrop', 'fade', 'show');
-                document.body.appendChild(backdrop);
-            });
-        });
-
-        const closeButton = videoModal.querySelector('.btn-close');
-        closeButton.addEventListener('click', function () {
-            const videoIframe = videoModal.querySelector('iframe');
-            videoIframe.src = '';
-            videoModal.style.display = 'none';
-            document.body.classList.remove('modal-open');
-            const backdrop = document.querySelector('.modal-backdrop');
-            if (backdrop) document.body.removeChild(backdrop);
-        });
-
-        videoModal.addEventListener('click', function (event) {
-            if (event.target === this) {
-                const videoIframe = videoModal.querySelector('iframe');
-                videoIframe.src = '';
-                videoModal.style.display = 'none';
-                document.body.classList.remove('modal-open');
-                const backdrop = document.querySelector('.modal-backdrop');
-                if (backdrop) document.body.removeChild(backdrop);
+    // m3u8 HLS (via hls.js atau player iframe jika punya server player)
+    if (strpos($src, '.m3u8') !== false) {
+        return "
+        <video class='w-100' height='200' autoplay muted controls playsinline id='video_" . md5($src) . "'></video>
+        <script src='https://cdn.jsdelivr.net/npm/hls.js@latest'></script>
+        <script>
+            const videoEl = document.getElementById('video_" . md5($src) . "');
+            if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource('{$safeSrc}');
+                hls.attachMedia(videoEl);
+            } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+                videoEl.src = '{$safeSrc}';
             }
-        });
-    });
-</script>
+        </script>";
+    }
+
+    // MP4 / WEBM
+    if (preg_match('/\.(mp4|webm)$/i', $src)) {
+        $type = pathinfo($src, PATHINFO_EXTENSION);
+        return "<video class='w-100' height='200' controls autoplay muted>
+                    <source src='{$safeSrc}' type='video/{$type}'>
+                    Browser tidak mendukung video ini.
+                </video>";
+    }
+
+    // HTML custom player (play.html, index.html, dll)
+    if (preg_match('/\.html?$/i', $src) || strpos($src, 'play.html') !== false) {
+        return "<iframe class='w-100' height='200' src='{$safeSrc}' allow='autoplay; fullscreen'></iframe>";
+    }
+
+    // WebRTC via iframe (misalnya wss:// atau gateway Janus/MediaSoup)
+    if (strpos($src, 'webrtc') !== false || strpos($src, 'wss://') !== false || strpos($src, 'rtc') !== false) {
+        return "<iframe class='w-100' height='200' src='{$safeSrc}' allow='camera; microphone; autoplay; fullscreen'></iframe>";
+    }
+
+    // RTSP link (biasanya perlu player gateway)
+    if (strpos($src, 'rtsp://') !== false) {
+        return "<div class='text-warning'>RTSP tidak bisa langsung diputar di browser. Gunakan gateway WebRTC/RTMP seperti Ant Media Server, Wowza, Janus, atau restream ke HLS/m3u8.</div>";
+    }
+
+    // Default (iframe fallback)
+    return "<iframe class='w-100' height='200' src='{$safeSrc}' allowfullscreen allow='autoplay'></iframe>";
+}
+?>
 
 <?php include "footer.php"; ?>

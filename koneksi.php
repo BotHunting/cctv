@@ -1,20 +1,44 @@
 <?php
-// Konstanta koneksi database (gunakan pengecekan agar tidak redefinisi)
-if (!defined('DB_HOST')) define('DB_HOST', 'sql12.freesqldatabase.com');
-if (!defined('DB_USER')) define('DB_USER', 'sql12772764');
-if (!defined('DB_PASS')) define('DB_PASS', '86hFpgPGtN');
-if (!defined('DB_NAME')) define('DB_NAME', 'sql12772764');
-if (!defined('DB_PORT')) define('DB_PORT', '3306');
-
-// Membuat koneksi ke database
-$conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
-
-// Cek koneksi
-if ($conn->connect_error) {
-    die("Koneksi gagal: " . $conn->connect_error);
+// Fungsi untuk mencoba koneksi ke database
+function cobaKoneksi($host, $user, $pass, $name, $port = 3306) {
+    $koneksi = @new mysqli($host, $user, $pass, $name, $port);
+    if ($koneksi->connect_errno === 0) {
+        $koneksi->set_charset("utf8");
+        return $koneksi;
+    }
+    return false;
 }
 
-// Set charset ke UTF-8
-$conn->set_charset("utf8");
+// Konfigurasi koneksi offline (lokal)
+$offline = [
+    'host' => 'localhost',
+    'user' => 'root',
+    'pass' => '',
+    'name' => 'sql12772764',
+    'port' => 3306
+];
+
+// Konfigurasi koneksi online
+$online = [
+    'host' => 'sql12.freesqldatabase.com',
+    'user' => 'sql12772764',
+    'pass' => '86hFpgPGtN',
+    'name' => 'sql12772764',
+    'port' => 3306
+];
+
+// Coba koneksi offline dahulu
+$conn = cobaKoneksi($offline['host'], $offline['user'], $offline['pass'], $offline['name'], $offline['port']);
+
+if (!$conn) {
+    // Jika gagal, coba koneksi online
+    $conn = cobaKoneksi($online['host'], $online['user'], $online['pass'], $online['name'], $online['port']);
+}
+
+// Jika masih gagal
+if (!$conn) {
+    die("Koneksi ke database gagal total.");
+}
+$koneksi_status = $conn === false ? 'gagal' : ($conn->host_info === 'localhost' ? 'offline' : 'online');
 
 ?>
